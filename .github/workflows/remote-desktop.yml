@@ -1,0 +1,38 @@
+name: macOS Remote Desktop
+on: 
+  workflow_dispatch: # This allows you to start it manually from the "Actions" tab
+
+jobs:
+  vnc-access:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Ngrok
+        run: brew install --cask ngrok
+
+      - name: Enable macOS Screen Sharing (VNC)
+        run: |
+          # Enable ARD/VNC
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -restart -agent -privs -all
+          
+          # Set the VNC password to 'runner' (You can change this)
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvncpasswd -vncpasswd runner
+
+      - name: Start Ngrok Tunnel
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+        run: |
+          ngrok config add-authtoken $NGROK_AUTHTOKEN
+          # Start tunnel in background and wait for it to initialize
+          ngrok tcp 5900 --log=stdout > ngrok.log &
+          sleep 5
+          # Display the connection URL in the logs
+          curl --silent http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url'
+
+      - name: Keep Runner Alive
+        run: |
+          echo "Keep-alive: The session is active. It will close automatically in 6 hours or when you cancel the job."
+          # This prevents the job from finishing and closing the tunnel
+          sleep 21600
